@@ -28,10 +28,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    const { error } = await supabase.from("visitors").insert({
-      ip_address: ip,
-      visited_at: new Date().toISOString(),
-    });
+    const { data, error } = await supabase
+      .from("visitors")
+      .insert({
+        ip_address: ip,
+        visited_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
 
     if (error) {
       console.error("Supabase insert error:", error);
@@ -41,7 +45,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return Response.json({ success: true });
+    // Return the inserted visitor ID so the frontend can link location data
+    return Response.json({ success: true, visitorId: data.id, ip });
   } catch (err) {
     console.error("Track API error:", err);
     return Response.json(
