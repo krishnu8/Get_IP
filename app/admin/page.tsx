@@ -1,0 +1,346 @@
+import { createServiceClient } from "@/lib/supabase/server";
+import type { Visitor } from "@/lib/types";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+
+export const metadata: Metadata = {
+  title: "Admin — Visitor Logs",
+  description: "View all tracked visitor records with IP addresses and timestamps.",
+};
+
+export const dynamic = "force-dynamic";
+
+const PER_PAGE = 15;
+
+interface AdminPageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function AdminPage({ searchParams }: AdminPageProps) {
+  const params = await searchParams;
+  const currentPage = Math.max(1, parseInt(params.page || "1", 10));
+  const offset = (currentPage - 1) * PER_PAGE;
+
+  const supabase = createServiceClient();
+
+  // Fetch total count
+  const { count: totalCount, error: countError } = await supabase
+    .from("visitors")
+    .select("*", { count: "exact", head: true });
+
+  if (countError) {
+    return <ErrorState message={countError.message} />;
+  }
+
+  const total = totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+
+  // Fetch paginated visitors (newest first)
+  const { data: visitors, error } = await supabase
+    .from("visitors")
+    .select("*")
+    .order("visited_at", { ascending: false })
+    .range(offset, offset + PER_PAGE - 1);
+
+  if (error) {
+    return <ErrorState message={error.message} />;
+  }
+
+  return (
+    <div className="min-h-screen">
+      {/* Nav */}
+      <nav className="fixed top-0 inset-x-0 z-50 border-b border-border/50 bg-background/60 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-sm text-muted hover:text-foreground transition-colors duration-200"
+          >
+            ← Back to Home
+          </Link>
+          <span className="text-sm font-semibold tracking-wide uppercase text-accent-light">
+            Admin Dashboard
+          </span>
+        </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto px-6 pt-28 pb-16">
+        {/* Header */}
+        <div className="mb-10 animate-fade-in">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">
+            <span className="gradient-text">Visitor Logs</span>
+          </h1>
+          <p className="text-muted text-sm">
+            Tracking anonymous visitor data in real time.
+          </p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 animate-fade-in-delay-1">
+          <StatCard
+            label="Total Visitors"
+            value={total.toLocaleString()}
+            icon={
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+              </svg>
+            }
+          />
+          <StatCard
+            label="Current Page"
+            value={`${currentPage} / ${totalPages}`}
+            icon={
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              </svg>
+            }
+          />
+          <StatCard
+            label="Per Page"
+            value={PER_PAGE.toString()}
+            icon={
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+              </svg>
+            }
+          />
+        </div>
+
+        {/* Table */}
+        <div className="glass-card overflow-hidden animate-fade-in-delay-2">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-border/50">
+                  <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                    #
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                    IP Address
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">
+                    Relative
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visitors && visitors.length > 0 ? (
+                  visitors.map((visitor: Visitor, index: number) => {
+                    const dt = new Date(visitor.visited_at);
+                    const dateStr = dt.toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    });
+                    const timeStr = dt.toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                    });
+                    const relativeTime = formatDistanceToNow(dt, {
+                      addSuffix: true,
+                    });
+
+                    return (
+                      <tr
+                        key={visitor.id}
+                        className="border-b border-border/30 hover:bg-card-hover/50 transition-colors duration-150"
+                      >
+                        <td className="px-6 py-4 text-sm text-muted font-mono">
+                          {offset + index + 1}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-accent-glow text-accent-light text-sm font-mono">
+                            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                            {visitor.ip_address}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          {dateStr}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-foreground font-mono">
+                          {timeStr}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-muted">
+                          {relativeTime}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-6 py-16 text-center text-muted"
+                    >
+                      <div className="flex flex-col items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-border" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                        </svg>
+                        <span>No visitor records found yet.</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8 animate-fade-in-delay-3">
+            <PaginationLink
+              page={currentPage - 1}
+              disabled={currentPage <= 1}
+              label="← Previous"
+            />
+
+            {generatePageNumbers(currentPage, totalPages).map((p, i) =>
+              p === null ? (
+                <span key={`dots-${i}`} className="px-2 text-muted">
+                  …
+                </span>
+              ) : (
+                <PaginationLink
+                  key={p}
+                  page={p}
+                  active={p === currentPage}
+                  label={p.toString()}
+                />
+              )
+            )}
+
+            <PaginationLink
+              page={currentPage + 1}
+              disabled={currentPage >= totalPages}
+              label="Next →"
+            />
+          </div>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border/50 py-6 text-center text-xs text-muted">
+        Built with Next.js, Supabase &amp; Tailwind CSS
+      </footer>
+    </div>
+  );
+}
+
+/* ---- Sub-components ---- */
+
+function StatCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="glass-card p-5 flex items-center gap-4">
+      <div className="w-10 h-10 rounded-xl bg-accent-glow flex items-center justify-center text-accent-light shrink-0">
+        {icon}
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-foreground">{value}</p>
+        <p className="text-xs text-muted uppercase tracking-wider">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function PaginationLink({
+  page,
+  disabled,
+  active,
+  label,
+}: {
+  page: number;
+  disabled?: boolean;
+  active?: boolean;
+  label: string;
+}) {
+  if (disabled) {
+    return (
+      <span className="px-4 py-2 rounded-lg text-sm text-muted/40 cursor-not-allowed border border-border/30">
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={`/admin?page=${page}`}
+      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
+        active
+          ? "bg-accent text-white border-accent shadow-lg shadow-accent/20"
+          : "border-border/50 text-muted hover:text-foreground hover:border-accent/50 hover:bg-card-hover"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="glass-card p-8 max-w-md text-center">
+        <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+          </svg>
+        </div>
+        <h2 className="text-lg font-semibold mb-2 text-foreground">
+          Database Error
+        </h2>
+        <p className="text-sm text-muted mb-4">{message}</p>
+        <Link
+          href="/"
+          className="inline-flex px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent-light transition-colors"
+        >
+          Go Home
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Generate a smart page number array with ellipsis.
+ * Example: [1, null, 4, 5, 6, null, 20]
+ */
+function generatePageNumbers(
+  current: number,
+  total: number
+): (number | null)[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const pages: (number | null)[] = [1];
+
+  if (current > 3) pages.push(null);
+
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+
+  if (current < total - 2) pages.push(null);
+  pages.push(total);
+
+  return pages;
+}
